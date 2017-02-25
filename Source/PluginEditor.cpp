@@ -14,8 +14,9 @@
 //==============================================================================
 // This is a handy slider subclass that controls an AudioProcessorParameter
 // (may move this class into the library itself at some point in the future..)
-class JuceDemoPluginAudioProcessorEditor::ParameterSlider   : public Slider,
-                                                              private Timer
+class ReverbTestAudioProcessorEditor::ParameterSlider
+:   public Slider
+,   private Timer
 {
 public:
     ParameterSlider (AudioProcessorParameter& p)
@@ -53,7 +54,7 @@ public:
 };
 
 //==============================================================================
-JuceDemoPluginAudioProcessorEditor::JuceDemoPluginAudioProcessorEditor (JuceDemoPluginAudioProcessor& owner)
+ReverbTestAudioProcessorEditor::ReverbTestAudioProcessorEditor (ReverbTestAudioProcessor& owner)
     : AudioProcessorEditor (owner),
       timecodeDisplayLabel (String::empty),
       wetLabel (String::empty, "Dry/Wet:"),
@@ -132,19 +133,19 @@ JuceDemoPluginAudioProcessorEditor::JuceDemoPluginAudioProcessorEditor (JuceDemo
     startTimerHz (30);
 }
 
-JuceDemoPluginAudioProcessorEditor::~JuceDemoPluginAudioProcessorEditor()
+ReverbTestAudioProcessorEditor::~ReverbTestAudioProcessorEditor()
 {
 }
 
 //==============================================================================
-void JuceDemoPluginAudioProcessorEditor::paint (Graphics& g)
+void ReverbTestAudioProcessorEditor::paint (Graphics& g)
 {
     g.setGradientFill (ColourGradient (Colours::white, 0, 0,
                                        Colours::lightgrey, 0, (float) getHeight(), false));
     g.fillAll();
 }
 
-void JuceDemoPluginAudioProcessorEditor::resized()
+void ReverbTestAudioProcessorEditor::resized()
 {
     // This lays out our child components...
 
@@ -170,7 +171,7 @@ void JuceDemoPluginAudioProcessorEditor::resized()
 }
 
 //==============================================================================
-void JuceDemoPluginAudioProcessorEditor::timerCallback()
+void ReverbTestAudioProcessorEditor::timerCallback()
 {
     updateTimecodeDisplay (getProcessor().lastPosInfo);
 }
@@ -206,7 +207,7 @@ static String quarterNotePositionToBarsBeatsString (double quarterNotes, int num
 }
 
 // Updates the text in our position label.
-void JuceDemoPluginAudioProcessorEditor::updateTimecodeDisplay (AudioPlayHead::CurrentPositionInfo pos)
+void ReverbTestAudioProcessorEditor::updateTimecodeDisplay (AudioPlayHead::CurrentPositionInfo pos)
 {
     if (lastDisplayedPosition != pos)
     {

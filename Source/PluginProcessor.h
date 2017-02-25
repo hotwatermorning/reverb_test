@@ -18,12 +18,12 @@
 /**
     As the name suggest, this class does the actual audio processing.
 */
-class JuceDemoPluginAudioProcessor  : public AudioProcessor
+class ReverbTestAudioProcessor  : public AudioProcessor
 {
 public:
     //==============================================================================
-    JuceDemoPluginAudioProcessor();
-    ~JuceDemoPluginAudioProcessor();
+    ReverbTestAudioProcessor();
+    ~ReverbTestAudioProcessor();
 
     //==============================================================================
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
@@ -32,8 +32,6 @@ public:
 
     //==============================================================================
     void processBlock (AudioBuffer<float>& buffer, MidiBuffer& midiMessages) override;
-
-    void processBlock (AudioBuffer<double>& buffer, MidiBuffer& midiMessages) override;
 
     //==============================================================================
     bool hasEditor() const override                                             { return true; }
@@ -70,10 +68,6 @@ public:
     // A bit of a hacky way to do it, but it's only a demo! Obviously in your own
     // code you'll do this much more neatly..
 
-    // this is kept up to date with the midi messages that arrive, and the UI component
-    // registers with it so it can represent the incoming messages
-    MidiKeyboardState keyboardState;
-
     // this keeps a copy of the last set of time info that was acquired during an audio
     // callback - the UI component will read this and display it.
     AudioPlayHead::CurrentPositionInfo lastPosInfo;
@@ -95,31 +89,17 @@ public:
 
 private:
     //==============================================================================
-    template <typename FloatType>
-    void process (AudioBuffer<FloatType>& buffer, MidiBuffer& midiMessages, AudioBuffer<FloatType>& delayBuffer);
-    template <typename FloatType>
-    void applyGain (AudioBuffer<FloatType>&, AudioBuffer<FloatType>& delayBuffer);
-    template <typename FloatType>
-    void applyDelay (AudioBuffer<FloatType>&, AudioBuffer<FloatType>& delayBuffer);
-
-    AudioBuffer<float> delayBufferFloat;
-    AudioBuffer<double> delayBufferDouble;
-    int delayPosition;
-    
     AudioBuffer<float> copy_buffer_;
-    
+
     float cached_lpf_param_;
     float cached_reverb_time_;
     float cached_er_time_;
     float cached_er_damping_;
     float cached_pre_delay_;
-
-    Synthesiser synth;
-
-    void initialiseSynth();
+    
     void updateCurrentTimeInfoFromHost();
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JuceDemoPluginAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ReverbTestAudioProcessor)
 };
 
 #endif  // __PLUGINPROCESSOR_H_526ED7A9__

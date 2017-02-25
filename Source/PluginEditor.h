@@ -18,12 +18,12 @@
 //==============================================================================
 /** This is the editor component that our filter will display.
 */
-class JuceDemoPluginAudioProcessorEditor  : public AudioProcessorEditor,
+class ReverbTestAudioProcessorEditor  : public AudioProcessorEditor,
                                             private Timer
 {
 public:
-    JuceDemoPluginAudioProcessorEditor (JuceDemoPluginAudioProcessor&);
-    ~JuceDemoPluginAudioProcessorEditor();
+    ReverbTestAudioProcessorEditor (ReverbTestAudioProcessor&);
+    ~ReverbTestAudioProcessorEditor();
 
     //==============================================================================
     void paint (Graphics&) override;
@@ -47,9 +47,9 @@ private:
     AudioPlayHead::CurrentPositionInfo lastDisplayedPosition;
 
     //==============================================================================
-    JuceDemoPluginAudioProcessor& getProcessor() const
+    ReverbTestAudioProcessor& getProcessor() const
     {
-        return static_cast<JuceDemoPluginAudioProcessor&> (processor);
+        return static_cast<ReverbTestAudioProcessor&> (processor);
     }
 
     void updateTimecodeDisplay (AudioPlayHead::CurrentPositionInfo);

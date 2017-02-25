@@ -172,6 +172,61 @@ struct DelayLine
     sample_t last_out_;
 };
 
+//struct ModulatedDelayLine
+//{
+//    ModulatedDelayLine(int length,
+//                       // モジュレーションのスピード
+//                       // 1サンプルに位相が進む量
+//                       double omega,
+//                       // モジュレーションの深さ
+//                       // 0 -> モジュレーションなし
+//                       // 1 -> DelayLineの全領域
+//                       double depth,
+//                       // モジュレーションの位相の初期位置
+//                       //
+//                       double phase)
+//    :   line_(length)
+//    ,   index_(0)
+//    ,   omega_(omega)
+//    ,   depth_(depth)
+//    ,   phase_(phase)
+//    {
+//    }
+//    
+//    void tick(sample_t x)
+//    {
+//        line_[index_] = x;
+//        index_ += 1;
+//        if((index_ + 1) >= line_.size()) {
+//            index_ = 0;
+//        }
+//        phase_ += omega_;
+//        
+//        if(phase_ > 2 * M_PI) {
+//            phase_ -= 2 * M_PI;
+//        }
+//    }
+//    
+//    //! get delayed sample
+//    sample_t get() const
+//    {
+//        double fpos =
+//        return line_[index_];
+//    }
+//    
+//    size_t size() const
+//    {
+//        return line_.size();
+//    }
+//    
+//    std::vector<sample_t> line_;
+//    int index_;
+//    sample_t last_out_;
+//    double omega_;
+//    double depth_;
+//    double phase_;
+//};
+
 struct FFCF
 {
     FFCF(sample_t g, int tap)
@@ -267,6 +322,25 @@ struct FFBCF
 struct APF
 {
     APF(sample_t g, int tap)
+    :   g_(g)
+    ,   delay_line_(tap)
+    {}
+    
+    sample_t process(sample_t x)
+    {
+        auto xm = delay_line_.get();
+        x += xm * g_;
+        delay_line_.tick(x);
+        return xm + x * (-g_);
+    }
+    
+    sample_t g_;
+    DelayLine delay_line_;
+};
+
+struct ModulatedAPF
+{
+    ModulatedAPF(sample_t g, int tap)
     :   g_(g)
     ,   delay_line_(tap)
     {}

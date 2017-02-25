@@ -14,146 +14,13 @@
 
 AudioProcessor* JUCE_CALLTYPE createPluginFilter();
 
-
 //==============================================================================
-/** A demo synth sound that's just a basic sine wave.. */
-class SineWaveSound : public SynthesiserSound
-{
-public:
-    SineWaveSound() {}
-
-    bool appliesToNote (int /*midiNoteNumber*/) override  { return true; }
-    bool appliesToChannel (int /*midiChannel*/) override  { return true; }
-};
-
-//==============================================================================
-/** A simple demo synth voice that just plays a sine wave.. */
-class SineWaveVoice  : public SynthesiserVoice
-{
-public:
-    SineWaveVoice()
-        : angleDelta (0.0),
-          tailOff (0.0)
-    {
-    }
-
-    bool canPlaySound (SynthesiserSound* sound) override
-    {
-        return dynamic_cast<SineWaveSound*> (sound) != nullptr;
-    }
-
-    void startNote (int midiNoteNumber, float velocity,
-                    SynthesiserSound* /*sound*/,
-                    int /*currentPitchWheelPosition*/) override
-    {
-        currentAngle = 0.0;
-        level = velocity * 0.15;
-        tailOff = 0.0;
-
-        double cyclesPerSecond = MidiMessage::getMidiNoteInHertz (midiNoteNumber);
-        double cyclesPerSample = cyclesPerSecond / getSampleRate();
-
-        angleDelta = cyclesPerSample * 2.0 * double_Pi;
-    }
-
-    void stopNote (float /*velocity*/, bool allowTailOff) override
-    {
-        if (allowTailOff)
-        {
-            // start a tail-off by setting this flag. The render callback will pick up on
-            // this and do a fade out, calling clearCurrentNote() when it's finished.
-
-            if (tailOff == 0.0) // we only need to begin a tail-off if it's not already doing so - the
-                                // stopNote method could be called more than once.
-                tailOff = 1.0;
-        }
-        else
-        {
-            // we're being told to stop playing immediately, so reset everything..
-
-            clearCurrentNote();
-            angleDelta = 0.0;
-        }
-    }
-
-    void pitchWheelMoved (int /*newValue*/) override
-    {
-        // can't be bothered implementing this for the demo!
-    }
-
-    void controllerMoved (int /*controllerNumber*/, int /*newValue*/) override
-    {
-        // not interested in controllers in this case.
-    }
-
-    void renderNextBlock (AudioBuffer<float>& outputBuffer, int startSample, int numSamples) override
-    {
-        processBlock (outputBuffer, startSample, numSamples);
-    }
-
-    void renderNextBlock (AudioBuffer<double>& outputBuffer, int startSample, int numSamples) override
-    {
-        processBlock (outputBuffer, startSample, numSamples);
-    }
-
-private:
-
-    template <typename FloatType>
-    void processBlock (AudioBuffer<FloatType>& outputBuffer, int startSample, int numSamples)
-    {
-        if (angleDelta != 0.0)
-        {
-            if (tailOff > 0)
-            {
-                while (--numSamples >= 0)
-                {
-                    const FloatType currentSample =
-                        static_cast<FloatType> (std::sin (currentAngle) * level * tailOff);
-
-                    for (int i = outputBuffer.getNumChannels(); --i >= 0;)
-                        outputBuffer.addSample (i, startSample, currentSample);
-
-                    currentAngle += angleDelta;
-                    ++startSample;
-
-                    tailOff *= 0.99;
-
-                    if (tailOff <= 0.005)
-                    {
-                        clearCurrentNote();
-
-                        angleDelta = 0.0;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                while (--numSamples >= 0)
-                {
-                    const FloatType currentSample = static_cast<FloatType> (std::sin (currentAngle) * level);
-
-                    for (int i = outputBuffer.getNumChannels(); --i >= 0;)
-                        outputBuffer.addSample (i, startSample, currentSample);
-
-                    currentAngle += angleDelta;
-                    ++startSample;
-                }
-            }
-        }
-    }
-
-    double currentAngle, angleDelta, level, tailOff;
-};
-
-//==============================================================================
-JuceDemoPluginAudioProcessor::JuceDemoPluginAudioProcessor()
+ReverbTestAudioProcessor::ReverbTestAudioProcessor()
     : lastUIWidth (400),
       lastUIHeight (200),
       wetParam (nullptr),
       timeParam (nullptr),
       lpfParam(nullptr),
-      delayPosition (0),
       cached_reverb_time_(-1),
       cached_er_time_(-1)
 {
@@ -170,8 +37,6 @@ JuceDemoPluginAudioProcessor::JuceDemoPluginAudioProcessor()
     addParameter (erDampingParam = new AudioParameterFloat ("er_damping", "ER Damping", 10.f, 16000.f, 11000.f));
     addParameter (stereoSpreadParam = new AudioParameterFloat ("stereo_spread", "Stereo Spread", -1.0f, 1.0f, 0.0f));
     addParameter (preDelayParam = new AudioParameterFloat ("pre_delay", "Pre Delay Time(ms)", 0.f, 100.f, 0.0f));
-
-    initialiseSynth();
     
     juce::AudioProcessor::AudioProcessorBus bus("Default", juce::AudioChannelSet::stereo());
     busArrangement.outputBuses.clear();
@@ -180,62 +45,26 @@ JuceDemoPluginAudioProcessor::JuceDemoPluginAudioProcessor()
     busArrangement.inputBuses.add(bus);
 }
 
-JuceDemoPluginAudioProcessor::~JuceDemoPluginAudioProcessor()
+ReverbTestAudioProcessor::~ReverbTestAudioProcessor()
 {
-}
-
-void JuceDemoPluginAudioProcessor::initialiseSynth()
-{
-    const int numVoices = 8;
-
-    // Add some voices...
-    for (int i = numVoices; --i >= 0;)
-        synth.addVoice (new SineWaveVoice());
-
-    // ..and give the synth a sound to play
-    synth.addSound (new SineWaveSound());
 }
 
 //==============================================================================
-void JuceDemoPluginAudioProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
+void ReverbTestAudioProcessor::prepareToPlay (double newSampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
-    synth.setCurrentPlaybackSampleRate (newSampleRate);
-    keyboardState.reset();
-
-    if (isUsingDoublePrecision())
-    {
-        delayBufferDouble.setSize (2, 12000);
-        delayBufferFloat.setSize (1, 1);
-    }
-    else
-    {
-        delayBufferFloat.setSize (2, 12000);
-        delayBufferDouble.setSize (1, 1);
-    }
-    
     copy_buffer_.setSize(2, samplesPerBlock);
-
     reset();
 }
 
-void JuceDemoPluginAudioProcessor::releaseResources()
+void ReverbTestAudioProcessor::releaseResources()
 {
-    // When playback stops, you can use this as an opportunity to free up any
-    // spare memory, etc.
-    keyboardState.reset();
 }
 
-void JuceDemoPluginAudioProcessor::reset()
+void ReverbTestAudioProcessor::reset()
 {
-    // Use this method as the place to clear any delay lines, buffers, etc, as it
-    // means there's been a break in the audio's continuity.
-    delayBufferFloat.clear();
-    delayBufferDouble.clear();
 }
 
-void JuceDemoPluginAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& midiMessages)
+void ReverbTestAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& midiMessages)
 {
     jassert (! isUsingDoublePrecision());
     const int numSamples = buffer.getNumSamples();
@@ -279,81 +108,7 @@ void JuceDemoPluginAudioProcessor::processBlock (AudioBuffer<float>& buffer, Mid
     updateCurrentTimeInfoFromHost();
 }
 
-void JuceDemoPluginAudioProcessor::processBlock (AudioBuffer<double>& buffer, MidiBuffer& midiMessages)
-{
-    jassert (isUsingDoublePrecision());
-    process (buffer, midiMessages, delayBufferDouble);
-}
-
-template <typename FloatType>
-void JuceDemoPluginAudioProcessor::process (AudioBuffer<FloatType>& buffer,
-                                            MidiBuffer& midiMessages,
-                                            AudioBuffer<FloatType>& delayBuffer)
-{
-    const int numSamples = buffer.getNumSamples();
-    
-    // In case we have more outputs than inputs, we'll clear any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    for (int i = 0; i < getTotalNumOutputChannels(); ++i)
-        buffer.clear (i, 0, numSamples);
-
-    // apply our gain-change to the incoming data..
-    applyGain (buffer, delayBuffer);
-
-    // Now pass any incoming midi messages to our keyboard state object, and let it
-    // add messages to the buffer if the user is clicking on the on-screen keys
-    keyboardState.processNextMidiBuffer (midiMessages, 0, numSamples, true);
-
-    // and now get our synth to process these midi events and generate its output.
-    synth.renderNextBlock (buffer, midiMessages, 0, numSamples);
-
-    // Apply our delay effect to the new output..
-    applyDelay (buffer, delayBuffer);
-
-    // Now ask the host for the current time so we can store it to be displayed later...
-    updateCurrentTimeInfoFromHost();
-}
-
-template <typename FloatType>
-void JuceDemoPluginAudioProcessor::applyGain (AudioBuffer<FloatType>& buffer, AudioBuffer<FloatType>& delayBuffer)
-{
-//    ignoreUnused (delayBuffer);
-//    const float gainLevel = *gainParam;
-//
-//    for (int channel = 0; channel < 1; ++channel)
-//        buffer.applyGain (channel, 0, buffer.getNumSamples(), gainLevel);
-}
-
-template <typename FloatType>
-void JuceDemoPluginAudioProcessor::applyDelay (AudioBuffer<FloatType>& buffer, AudioBuffer<FloatType>& delayBuffer)
-{
-//    const int numSamples = buffer.getNumSamples();
-//    const float delayLevel = *delayParam;
-//
-//    int delayPos = 0;
-//
-//    for (int channel = 0; channel < 1; ++channel)
-//    {
-//        FloatType* const channelData = buffer.getWritePointer (channel);
-//        FloatType* const delayData = delayBuffer.getWritePointer (jmin (channel, delayBuffer.getNumChannels() - 1));
-//        delayPos = delayPosition;
-//
-//        for (int i = 0; i < numSamples; ++i)
-//        {
-//            const FloatType in = channelData[i];
-//            channelData[i] += delayData[delayPos];
-//            delayData[delayPos] = (delayData[delayPos] + in) * delayLevel;
-//
-//            if (++delayPos >= delayBuffer.getNumSamples())
-//                delayPos = 0;
-//        }
-//    }
-//
-//    delayPosition = delayPos;
-}
-
-void JuceDemoPluginAudioProcessor::updateCurrentTimeInfoFromHost()
+void ReverbTestAudioProcessor::updateCurrentTimeInfoFromHost()
 {
     if (AudioPlayHead* ph = getPlayHead())
     {
@@ -371,13 +126,13 @@ void JuceDemoPluginAudioProcessor::updateCurrentTimeInfoFromHost()
 }
 
 //==============================================================================
-AudioProcessorEditor* JuceDemoPluginAudioProcessor::createEditor()
+AudioProcessorEditor* ReverbTestAudioProcessor::createEditor()
 {
-    return new JuceDemoPluginAudioProcessorEditor (*this);
+    return new ReverbTestAudioProcessorEditor(*this);
 }
 
 //==============================================================================
-void JuceDemoPluginAudioProcessor::getStateInformation (MemoryBlock& destData)
+void ReverbTestAudioProcessor::getStateInformation (MemoryBlock& destData)
 {
     // You should use this method to store your parameters in the memory block.
     // Here's an example of how you can use XML to make it easy and more robust:
@@ -398,7 +153,7 @@ void JuceDemoPluginAudioProcessor::getStateInformation (MemoryBlock& destData)
     copyXmlToBinary (xml, destData);
 }
 
-void JuceDemoPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
+void ReverbTestAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     // You should use this method to restore your parameters from this memory block,
     // whose contents will have been created by the getStateInformation() call.
@@ -427,5 +182,5 @@ void JuceDemoPluginAudioProcessor::setStateInformation (const void* data, int si
 // This creates new instances of the plugin..
 AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new JuceDemoPluginAudioProcessor();
+    return new ReverbTestAudioProcessor();
 }
