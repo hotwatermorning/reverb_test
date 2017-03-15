@@ -1,11 +1,3 @@
-//
-//  Reverb.cpp
-//  JuceDemoPlugin
-//
-//  Created by yuasa on 2017/01/23.
-//
-//
-
 #include "../JuceLibraryCode/AppConfig.h"
 #include "Reverb.hpp"
 #include <vector>

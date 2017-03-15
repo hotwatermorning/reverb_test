@@ -1,11 +1,3 @@
-//
-//  Reverb.hpp
-//  JuceDemoPlugin
-//
-//  Created by yuasa on 2017/01/23.
-//
-//
-
 #ifndef Reverb_hpp
 #define Reverb_hpp
 
