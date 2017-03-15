@@ -151,7 +151,7 @@ struct DelayLine
     {
         line_[index_] = x;
         index_ += 1;
-        if((index_ + 1) >= line_.size()) {
+        if(index_ >= line_.size()) {
             index_ = 0;
         }
     }
@@ -172,60 +172,86 @@ struct DelayLine
     sample_t last_out_;
 };
 
-//struct ModulatedDelayLine
-//{
-//    ModulatedDelayLine(int length,
-//                       // モジュレーションのスピード
-//                       // 1サンプルに位相が進む量
-//                       double omega,
-//                       // モジュレーションの深さ
-//                       // 0 -> モジュレーションなし
-//                       // 1 -> DelayLineの全領域
-//                       double depth,
-//                       // モジュレーションの位相の初期位置
-//                       //
-//                       double phase)
-//    :   line_(length)
-//    ,   index_(0)
-//    ,   omega_(omega)
-//    ,   depth_(depth)
-//    ,   phase_(phase)
-//    {
-//    }
-//    
-//    void tick(sample_t x)
-//    {
-//        line_[index_] = x;
-//        index_ += 1;
-//        if((index_ + 1) >= line_.size()) {
-//            index_ = 0;
-//        }
-//        phase_ += omega_;
-//        
-//        if(phase_ > 2 * M_PI) {
-//            phase_ -= 2 * M_PI;
-//        }
-//    }
-//    
-//    //! get delayed sample
-//    sample_t get() const
-//    {
-//        double fpos =
-//        return line_[index_];
-//    }
-//    
-//    size_t size() const
-//    {
-//        return line_.size();
-//    }
-//    
-//    std::vector<sample_t> line_;
-//    int index_;
-//    sample_t last_out_;
-//    double omega_;
-//    double depth_;
-//    double phase_;
-//};
+struct ModulatedDelayLine
+{
+    ModulatedDelayLine(int length,
+                       // モジュレーションのスピード
+                       // 1サンプルに位相が進む量
+                       double omega,
+                       // モジュレーションの深さ
+                       // 0 -> モジュレーションなし
+                       // 1 -> DelayLineの全領域
+                       double depth,
+                       // モジュレーションの位相の初期位置
+                       double phase = M_PI)
+    :   line_(length)
+    ,   index_(0)
+    ,   omega_(omega)
+    ,   depth_(depth)
+    ,   phase_(phase)
+    {
+        sin_table_.resize(kTableSize);
+        for(int i = 0; i < kTableSize; ++i) {
+            sin_table_[i] = sin(2 * M_PI * i / (double)kTableSize);
+        }
+        
+        assert(depth_ < length);
+        assert(omega < 2 * M_PI);
+    }
+    
+    static int const kTableSize = 2048;
+    std::vector<double> sin_table_;
+    
+    void tick(sample_t x)
+    {
+        line_[index_] = x;
+        index_ += 1;
+        if(index_ >= line_.size()) {
+            index_ = 0;
+        }
+        
+        phase_ += omega_;
+        
+        if(phase_ > 2 * M_PI) {
+            phase_ -= 2 * M_PI;
+        }
+    }
+    
+    //! get delayed sample
+    sample_t get() const
+    {
+        int table_index = (int)(phase_ / (2 * M_PI) * kTableSize);
+        if(table_index >= kTableSize) {
+            table_index %= kTableSize;
+        }
+        
+        double fshift = (sin_table_[table_index] + 1.0) * 0.5 * (depth_ * (line_.size() - 1));
+        
+        int npos = (int)fshift;
+        auto x_left = npos;
+        auto x_right = npos + 1;
+        auto frac = fshift - x_left;
+
+        // 現在のindex位置基準にずらす
+        x_left = (index_ + x_left + line_.size()) % line_.size();
+        x_right = (index_ + x_right + line_.size()) % line_.size();
+        
+        //return line_[x_left] + (line_[x_right] - line_[x_left]) * frac;
+        return frac * line_[x_right] + (1 - frac) * line_[x_right];
+    }
+    
+    size_t size() const
+    {
+        return line_.size();
+    }
+    
+    std::vector<sample_t> line_;
+    int index_;
+    sample_t last_out_;
+    double omega_;
+    double depth_;
+    double phase_;
+};
 
 struct FFCF
 {
@@ -270,14 +296,16 @@ struct FFBCF
 {
     FFBCF(double cutoff, sample_t g, int tap)
     :   g_(g)
-    ,   delay_line_(tap)
     ,   cutoff_(0)
+    ,   delay_line_(tap)
+    ,   modulated_delay_line_(tap, 0.001 + g, 1.0)
     {
         SetCutoff(cutoff);
     }
     
     FFBCF(FFBCF const &rhs)
     :   delay_line_(rhs.delay_line_.size())
+    ,   modulated_delay_line_(rhs.delay_line_.size(), 0.001 + rhs.g_, 1.0)
     {
         cutoff_ = -1;
         g_ = rhs.g_;
@@ -309,6 +337,7 @@ struct FFBCF
         auto xm = delay_line_.get();
         x += iir_.processSingleSampleRaw(xm * g_);
         delay_line_.tick(x);
+        
         return xm;
         // ここで x + xmとすると、ccrmaの定義になる
     }
@@ -316,6 +345,7 @@ struct FFBCF
     double cutoff_;
     sample_t g_;
     DelayLine delay_line_;
+    ModulatedDelayLine modulated_delay_line_;
     IIRFilter iir_;
 };
 
@@ -324,6 +354,7 @@ struct APF
     APF(sample_t g, int tap)
     :   g_(g)
     ,   delay_line_(tap)
+    ,   modulated_delay_line_(2, 0.0011, 1)
     {}
     
     sample_t process(sample_t x)
@@ -331,11 +362,16 @@ struct APF
         auto xm = delay_line_.get();
         x += xm * g_;
         delay_line_.tick(x);
-        return xm + x * (-g_);
+        
+        //return xm + x * (-g_);
+        auto xm2 = modulated_delay_line_.get();
+        modulated_delay_line_.tick(xm + x * -g_);
+        return xm2;
     }
     
     sample_t g_;
     DelayLine delay_line_;
+    ModulatedDelayLine modulated_delay_line_;
 };
 
 struct ModulatedAPF
@@ -424,13 +460,13 @@ private:
 MultiTapDelay CreateEarlyReflection(float milliseconds)
 {
     MultiTapDelay md;
-    md.addDelay(0.7, 44100 * milliseconds / 1000.0);
-    md.addDelay(0.3, 44100 * milliseconds * 1.13 / 1000.0);
-    md.addDelay(0.1, 44100 * milliseconds * 1.37 / 1000.0);
-//    md.addDelay(0.4, 44100 * milliseconds * 1.89 / 1000.0);
-//    md.addDelay(0.32, 44100 * milliseconds * 2.39 / 1000.0);
-//    md.addDelay(0.21, 44100 * milliseconds * 2.79 / 1000.0);
-//    md.addDelay(0.10, 44100 * milliseconds * 3.19 / 1000.0);
+    md.addDelay(0.9, 44100 * milliseconds / 1000.0);
+    md.addDelay(0.8, 44100 * milliseconds * 1.13 / 1000.0);
+    md.addDelay(0.7, 44100 * milliseconds * 1.37 / 1000.0);
+    md.addDelay(0.6, 44100 * milliseconds * 1.89 / 1000.0);
+    md.addDelay(0.55, 44100 * milliseconds * 2.39 / 1000.0);
+    md.addDelay(0.43, 44100 * milliseconds * 2.79 / 1000.0);
+    md.addDelay(0.32, 44100 * milliseconds * 3.19 / 1000.0);
     
     return md;
 }
@@ -597,10 +633,6 @@ void SetStereoSpread(float amount)
     wet2 = 1.0 - wet1;
 }
 
-DelayLine fb_delay_from_left_(3720);
-DelayLine fb_delay_from_right_(3163);
-float fb_decay_ = 0.3;
-
 struct DitorroReverb
 {
     DelayLine pre_delay_;
@@ -620,6 +652,42 @@ struct DitorroReverb
     };
 };
 
+DelayLine fb_delay_from_left_(3721);
+DelayLine fb_delay_from_right_(3163);
+double feedback_from_left_ = 0;
+double feedback_from_right_ = 0;
+
+double g_feedback_gain = 0.1;
+
+void SetFeedbackGain(float feedback_gain)
+{
+    g_feedback_gain = feedback_gain;
+}
+
+sample_t hist = 0;
+
+juce::IIRFilter make_hp(int sampling_rate, int cutoff)
+{
+    juce::IIRFilter filter;
+    filter.setCoefficients(juce::IIRCoefficients::makeHighPass(sampling_rate, cutoff));
+    return filter;
+}
+
+juce::IIRFilter iir_from_left_ = make_hp(44100, 4000);
+juce::IIRFilter iir_from_right_ = make_hp(44100, 4000);
+
+APF apf_from_left_(0.7, 259);
+APF apf_from_right_(0.7, 313);
+
+ModulatedDelayLine mod_delay_left_(2, 0.0137, 0.5);
+ModulatedDelayLine mod_delay_right_(2, 0.00143, 0.5);
+
+double const kLatencyOfEars = 20.0 / (340 * 100);
+int const latency_samples = std::round(kLatencyOfEars * 44100);
+
+DelayLine input_delay_from_left_(latency_samples);
+DelayLine input_delay_from_right_(latency_samples);
+
 void ApplyReverb(AudioBuffer<float> const & input,
                  AudioBuffer<float> & output,
                  int length,
@@ -627,31 +695,37 @@ void ApplyReverb(AudioBuffer<float> const & input,
                  float er_gain)
 {
     for(int i = 0; i < length; ++i) {
-//        sample_t left = input.getReadPointer(0)[i] * (0.9 - fb_decay_) + fb_delay_from_right_.get() * fb_decay_;
-//        sample_t right = input.getReadPointer(1)[i] * (0.9 - fb_decay_) + fb_delay_from_left_.get() * fb_decay_;
-//        
-//        left = rev_left_.process(left, dry_wet, er_gain);
-//        right = rev_right_.process(right, dry_wet, er_gain);
-//        
-//        output.getWritePointer(0)[i] = left;
-//        output.getWritePointer(1)[i] = right;
-//        
-//        fb_delay_from_left_.tick(left / );
-//        fb_delay_from_right_.tick(right);
-        
         double const dry_gain = GetPanVolumeBySin(dry_wet * 2 - 1) * cos(M_PI / 4.0);
         double const wet_gain = GetPanVolumeBySin(1 - dry_wet * 2) * cos(M_PI / 4.0);
         
         sample_t dry_left = input.getReadPointer(0)[i];
         sample_t dry_right = input.getReadPointer(1)[i];
+        
+        auto dry_left_ear = (dry_left + input_delay_from_right_.get()) / 2;
+        auto dry_right_ear = (dry_right + input_delay_from_left_.get()) / 2;
+        
+        input_delay_from_left_.tick(dry_left);
+        input_delay_from_right_.tick(dry_right);
 
-        sample_t wet_left = rev_left_.process(dry_left, er_gain);
-        sample_t wet_right = rev_right_.process(dry_right, er_gain);
+        sample_t wet_left = rev_left_.process(dry_left_ear * (1.0 - g_feedback_gain) + feedback_from_right_ * g_feedback_gain, er_gain);
+        sample_t wet_right = rev_right_.process(dry_right_ear * (1.0 - g_feedback_gain) + feedback_from_left_ * g_feedback_gain, er_gain);
+        
+        feedback_from_left_ = apf_from_left_.process(fb_delay_from_left_.get());
+        fb_delay_from_left_.tick(wet_left);
+        
+        feedback_from_right_ = apf_from_right_.process(fb_delay_from_right_.get());
+        fb_delay_from_right_.tick(wet_right);
         
         sample_t out_left = dry_left * dry_gain + wet_gain * (wet1 * wet_left + wet2 * wet_right);
         sample_t out_right = dry_right * dry_gain + wet_gain * (wet2 * wet_left + wet1 * wet_right);
         
-        output.getWritePointer(0)[i] = out_left;
-        output.getWritePointer(1)[i] = out_right;
+        //output.getWritePointer(0)[i] = out_left;
+        //output.getWritePointer(1)[i] = out_right;
+        
+        output.getWritePointer(0)[i] = jlimit<sample_t>(-4.0, 4.0, mod_delay_left_.get());
+        output.getWritePointer(1)[i] = jlimit<sample_t>(-4.0, 4.0, mod_delay_right_.get());
+        
+        mod_delay_left_.tick(out_left);
+        mod_delay_right_.tick(out_right);
     }
 }

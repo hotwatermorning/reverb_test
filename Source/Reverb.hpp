@@ -19,6 +19,7 @@ void SetAirAbsorption(float freq);
 void SetStereoSpread(float amount);
 void SetErDamping(float frequency);
 void SetPreDelayTime(float milliseconds);
+void SetFeedbackGain(float feedback_gain);
 
 void ApplyReverb(AudioBuffer<float> const & input,
                  AudioBuffer<float> & output,

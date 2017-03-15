@@ -86,6 +86,7 @@ public:
     AudioParameterFloat* erDampingParam;
     AudioParameterFloat* stereoSpreadParam;
     AudioParameterFloat* preDelayParam;
+    AudioParameterFloat* feedbackGainParam;
 
 private:
     //==============================================================================
@@ -96,6 +97,7 @@ private:
     float cached_er_time_;
     float cached_er_damping_;
     float cached_pre_delay_;
+    float cached_feedback_;
     
     void updateCurrentTimeInfoFromHost();
 

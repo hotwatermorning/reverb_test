@@ -33,13 +33,15 @@ public:
 private:
     class ParameterSlider;
 
-    Label timecodeDisplayLabel, wetLabel, timeLabel, lpfLabel,
+    Label timecodeDisplayLabel, buildTimeLabel, wetLabel, timeLabel, lpfLabel,
     erTimeLabel, erGainLabel, erDampingLabel,
-    stereoSpreadLabel, preDelayTimeLabel;
+    stereoSpreadLabel, preDelayTimeLabel,
+    feedbackGainLabel;
     
     ScopedPointer<ParameterSlider> wetSlider, timeSlider, lpfSlider,
     erTimeSlider, erGainSlider, erDampingSlider,
-    stereoSpreadSlider, preDelayTimeSlider;
+    stereoSpreadSlider, preDelayTimeSlider,
+    feedbackGainSlider;
     
     ScopedPointer<ResizableCornerComponent> resizer;
     ComponentBoundsConstrainer resizeLimits;

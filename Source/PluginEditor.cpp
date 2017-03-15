@@ -57,6 +57,7 @@ public:
 ReverbTestAudioProcessorEditor::ReverbTestAudioProcessorEditor (ReverbTestAudioProcessor& owner)
     : AudioProcessorEditor (owner),
       timecodeDisplayLabel (String::empty),
+      buildTimeLabel(String::empty, std::string(__DATE__) + " " + __TIME__),
       wetLabel (String::empty, "Dry/Wet:"),
       timeLabel (String::empty, "Time:"),
       lpfLabel (String::empty, "Air Absorption"),
@@ -64,7 +65,8 @@ ReverbTestAudioProcessorEditor::ReverbTestAudioProcessorEditor (ReverbTestAudioP
       erGainLabel(String::empty, "ER Gain"),
       erDampingLabel(String::empty, "Er Damping"),
       stereoSpreadLabel(String::empty, "Stereo Spread"),
-      preDelayTimeLabel(String::empty, "Pre Delay Time(ms)")
+      preDelayTimeLabel(String::empty, "Pre Delay Time(ms)"),
+      feedbackGainLabel(String::empty, "Feedback Gain")
 {
     // add some sliders..
     addAndMakeVisible (wetSlider = new ParameterSlider (*owner.wetParam));
@@ -90,6 +92,9 @@ ReverbTestAudioProcessorEditor::ReverbTestAudioProcessorEditor (ReverbTestAudioP
     
     addAndMakeVisible (preDelayTimeSlider = new ParameterSlider (*owner.preDelayParam));
     preDelayTimeSlider->setSliderStyle (Slider::Rotary);
+    
+    addAndMakeVisible (feedbackGainSlider = new ParameterSlider (*owner.feedbackGainParam));
+    feedbackGainSlider->setSliderStyle (Slider::Rotary);
 
     // add some labels for the sliders..
     wetLabel.attachToComponent (wetSlider, false);
@@ -115,11 +120,19 @@ ReverbTestAudioProcessorEditor::ReverbTestAudioProcessorEditor (ReverbTestAudioP
     
     preDelayTimeLabel.attachToComponent (preDelayTimeSlider, false);
     preDelayTimeLabel.setFont (Font (11.0f));
+    
+    feedbackGainLabel.attachToComponent (feedbackGainSlider, false);
+    feedbackGainLabel.setFont (Font (11.0f));
 
     // add a label that will display the current timecode and status..
     addAndMakeVisible (timecodeDisplayLabel);
     timecodeDisplayLabel.setColour (Label::textColourId, Colours::blue);
     timecodeDisplayLabel.setFont (Font (Font::getDefaultMonospacedFontName(), 15.0f, Font::plain));
+    
+    // add a label that will display the current timecode and status..
+    addAndMakeVisible (buildTimeLabel);
+    buildTimeLabel.setColour (Label::textColourId, Colours::blue);
+    buildTimeLabel.setFont (Font (Font::getDefaultMonospacedFontName(), 15.0f, Font::plain));
 
     // add the triangular resizer component for the bottom-right of the UI
     addAndMakeVisible (resizer = new ResizableCornerComponent (this, &resizeLimits));
@@ -152,17 +165,19 @@ void ReverbTestAudioProcessorEditor::resized()
     Rectangle<int> r (getLocalBounds().reduced (8));
 
     timecodeDisplayLabel.setBounds (r.removeFromTop (26));
+    buildTimeLabel.setBounds(r.removeFromTop(26));
 
     r.removeFromTop (30);
     Rectangle<int> sliderArea (r.removeFromTop (50));
-    wetSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 8)));
-    timeSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 7)));
-    lpfSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 6)));
-    erTimeSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 5)));
-    erGainSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 4)));
-    erDampingSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 3)));
-    stereoSpreadSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 2)));
-    preDelayTimeSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 1)));
+    wetSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 9)));
+    timeSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 8)));
+    lpfSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 7)));
+    erTimeSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 6)));
+    erGainSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 5)));
+    erDampingSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 4)));
+    stereoSpreadSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 3)));
+    preDelayTimeSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 2)));
+    feedbackGainSlider->setBounds (sliderArea.removeFromLeft (jmin (180, sliderArea.getWidth() / 1)));
 
     resizer->setBounds (getWidth() - 16, getHeight() - 16, 16, 16);
 

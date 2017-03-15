@@ -16,7 +16,11 @@ AudioProcessor* JUCE_CALLTYPE createPluginFilter();
 
 //==============================================================================
 ReverbTestAudioProcessor::ReverbTestAudioProcessor()
-    : lastUIWidth (400),
+    : AudioProcessor(BusesProperties()
+                     .withInput("Default Input", juce::AudioChannelSet::stereo())
+                     .withOutput("Default Output", juce::AudioChannelSet::stereo())
+                     ),
+      lastUIWidth (400),
       lastUIHeight (200),
       wetParam (nullptr),
       timeParam (nullptr),
@@ -37,12 +41,9 @@ ReverbTestAudioProcessor::ReverbTestAudioProcessor()
     addParameter (erDampingParam = new AudioParameterFloat ("er_damping", "ER Damping", 10.f, 16000.f, 11000.f));
     addParameter (stereoSpreadParam = new AudioParameterFloat ("stereo_spread", "Stereo Spread", -1.0f, 1.0f, 0.0f));
     addParameter (preDelayParam = new AudioParameterFloat ("pre_delay", "Pre Delay Time(ms)", 0.f, 100.f, 0.0f));
-    
-    juce::AudioProcessor::AudioProcessorBus bus("Default", juce::AudioChannelSet::stereo());
-    busArrangement.outputBuses.clear();
-    busArrangement.outputBuses.add(bus);
-    busArrangement.inputBuses.clear();
-    busArrangement.inputBuses.add(bus);
+    //! 付けてみたけどあまり効果がないかも
+    //! 値を大きくするとフィードバックして発散してしまうので小さい値に抑えている
+    addParameter (feedbackGainParam = new AudioParameterFloat ("feedback", "Feedback Gain", 0.f, 0.08f, 0.0f));
 }
 
 ReverbTestAudioProcessor::~ReverbTestAudioProcessor()
@@ -78,6 +79,7 @@ void ReverbTestAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuf
     const float er_damping = *erDampingParam;
     const float lpf_param = *lpfParam;
     const float pre_delay = *preDelayParam;
+    const float feedback = *feedbackGainParam;
     
     if(lpf_param != cached_lpf_param_) {
         cached_lpf_param_ = lpf_param;
@@ -98,6 +100,10 @@ void ReverbTestAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuf
     if(pre_delay != cached_pre_delay_) {
         cached_pre_delay_ = pre_delay;
         SetPreDelayTime(pre_delay);
+    }
+    if(feedback != cached_feedback_) {
+        cached_feedback_ = feedback;
+        SetFeedbackGain(feedback);
     }
     
     SetStereoSpread(*stereoSpreadParam);
